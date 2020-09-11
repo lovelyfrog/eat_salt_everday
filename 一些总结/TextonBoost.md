@@ -72,4 +72,61 @@ $$
 
 * color potential parameters:
 
-  在test的时候对每张图像单独学习，使用[41]中的方法。首先color clusters通过K-means来学习，然后用一个迭代的算法:reminiscent of EM。
+  在test的时候对每张图像单独学习，使用[41]中的方法。首先color clusters通过K-means来学习，然后用一个迭代的算法:reminiscent of EM。没怎么看懂
+
+* location potential parameters:
+	$$
+  {\pmb {\theta}}_{\lambda}(c, \hat{i}) = \left(\frac{N_{c,\hat{i}}+\alpha_{\lambda}}{N_{\hat{i}}+\alpha_{\lambda}} \right)^{w_{\lambda}}
+  $$
+  
+  其中$N_{c,\hat{i}}$是在normalized location $\hat{i}$上的标签为$c$类的像素个数，$N_{\hat{i}}$是总像素个数，该式可以看作是在位置$\hat{i}$上像素类别为$c$的概率。
+  
+* Edge potential parameters: manually selected 来减小在validation set上的error
+
+## 四. Boosted Learning of Texture, Layout and Context
+
+上述四个中最重要的term就是unary texture-layout potential $\psi$，它基于一组新的features，叫做texture-layout filters。
+
+### 4.1 Textons
+
+textons被证明在categorize material 和 generic class objects上是高效的。
+
+
+
+![image-20200910104305361](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200910104305361.png)
+
+textonization的过程：每张图像都被一个17D的filter-bank卷积，得到的17D responses然后被whitened，然后使用在Euclidean-distance上的K-means 聚类（这一步具体怎么聚类的？），最后图像中的每个像素都会被分配给最近的cluster center，得到texton map。
+
+### 4.2 Texture-Layout filters
+
+每个texture-layout filter都是一个对于一个图像区域$r$和一个texton $t$的一个pair $(r, t)$，其中区域$r$是定义在像素$i$附近的区域，这里只考虑长方形区域。一组candidate rectangles被随机选择，使得他们能够cover图像的一半区域，在像素$i$的feature response是在offset region $r+i$上texton为t的像素的概率
+$$
+v_{[r,t]}(i) = \frac{1}{area(r)} \sum_{j \in (r+i)} [T_j = t]
+$$
+filter responses 可以用integral images[48]来高效的计算，$\hat{T}^{(t)}$是$T$对于texton channel $t$的integral image，那么feature response可以这样计算：
+$$
+v_{[r,t]}(i) = \hat{T}^{(t)}_{r_{br}} - \hat{T}^{(t)}_{r_{bl}} - \hat{T}^{(t)}_{r_{tr}} + \hat{T}^{(t)}_{r_{tl}}
+$$
+其中$r_{br}, r_{bl}, r_{tr}, r_{tl}$指得是bottom right, bottom left, top right, top left corners of rectangle $r$。
+
+它可以让我们自动学到layout和context 信息。
+
+![image-20200910145044304](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200910145044304.png)
+
+### 4.3 variations on texture-layout filters
+
+作者实验了不同的region shape $r$，但是发现效果都并没有怎么样的好。
+
+#### 4.3.1 texton-dependent layout filters
+
+Texton-dependent layout filter与standard texture-layout filter一样，除了它用的是在要被分类的像素$i$处的sexton $T_i$，而不是一个particular learned sexton。feature response 就是 $v_{[r, T_i]}(i)$
+
+#### 4.3.2 separable texture-layout filters
+
+对于特定的情况，比如处理视频序列或大图像，使用一个新的filter。使用spans来替代rectangles：horizontal spans计算离要分类的像素的y坐标相邻的horizontal strip中，与texton index一致的比例。vertical spans 也是类似的。
+
+![image-20200910162650344](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200910162650344.png)
+
+### 4.4 Learning texture-layout filters using Joint Boost
+
+使用了Joint Boost算法的变式[45]，
