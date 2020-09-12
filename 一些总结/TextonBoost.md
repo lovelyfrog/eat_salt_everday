@@ -29,10 +29,14 @@
 
 4个potentials:
 
-* Texture-layout potentials
-* Color potentials
-* location potentials
-* edge potentials
+* Texture-layout potentials : $\psi_i(c_i, {\bf x}) = \log P(c_i|{\bf x}, i)$，它建模了texture, layout, 以及textural context
+* Color potentials：利用在特定图像上物体的颜色分布，使用在CIELab 上的Gaussian Mixture Models
+* location potentials：一些特定的类别往往出现在图像的某个特定位置，计算各个像素点上出现某个类别的频率。
+* edge potentials： $\phi(c_i, c_j, g_{ij}({\bf x});{\pmb \theta}_{\phi}) = - {\pmb \theta}_{\phi}^T {\bf g}_{ij}({\bf x})[c_i \neq c_j]$
+
+$$
+\log P({\bf c}|{\bf x}, {\pmb \theta}) = \sum_i \psi_i(c_i, {\bf x}; {\pmb \theta}_{\psi}) + \pi(c_i, x_i;{\pmb \theta}_{\pi}) + \lambda(c_i,i;{\pmb \theta}_{\lambda}) + \sum_{(i,j) \in \epsilon} \phi(c_i, c_j, g_{ij}({\bf x});{\pmb \theta}_{\phi}) - \log Z({\pmb \theta}, {\bf x})
+$$
 
 ### 3.1 CRF上的推断
 
@@ -52,9 +56,9 @@ $$
 
 引入$P(\pmb \theta)$是为了防止过拟合。然后使用梯度上升来更新$\pmb \theta$，但是这样精确推断计算量过大，所以使用alpha-expansion的技巧来近似，也可以使用loopy belief propagation (BP)和variational methods。
 
-但是这样得到的结果不是很好，具体我还没怎么看懂。
+但是这样得到的结果不是很好。
 
-### 3.2.2 Piecewise Training
+#### 3.2.2 Piecewise Training
 
 使用piecewise training，CRF中的每一项被单独训练然后用weighting functions重新结合起来。
 
@@ -72,7 +76,7 @@ $$
 
 * color potential parameters:
 
-  在test的时候对每张图像单独学习，使用[41]中的方法。首先color clusters通过K-means来学习，然后用一个迭代的算法:reminiscent of EM。没怎么看懂
+  在test的时候对每张图像单独学习，使用[41]中的方法。首先color clusters通过K-means来学习，然后用一个迭代的算法:reminiscent of EM。
 
 * location potential parameters:
 	$$
@@ -95,7 +99,7 @@ textons被证明在categorize material 和 generic class objects上是高效的�
 
 ![image-20200910104305361](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200910104305361.png)
 
-textonization的过程：每张图像都被一个17D的filter-bank卷积，得到的17D responses然后被whitened，然后使用在Euclidean-distance上的K-means 聚类（这一步具体怎么聚类的？），最后图像中的每个像素都会被分配给最近的cluster center，得到texton map。
+textonization的过程：每张图像都被一个17D的filter-bank卷积，得到的17D responses然后被whitened，然后使用在Euclidean-distance上的K-means 聚类，最后图像中的每个像素都会被分配给最近的cluster center，得到texton map。
 
 ### 4.2 Texture-Layout filters
 
@@ -110,6 +114,8 @@ $$
 其中$r_{br}, r_{bl}, r_{tr}, r_{tl}$指得是bottom right, bottom left, top right, top left corners of rectangle $r$。
 
 它可以让我们自动学到layout和context 信息。
+
+![image-20200911144229437](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200911144229437.png)
 
 ![image-20200910145044304](/Users/lovelyfrog/Library/Application Support/typora-user-images/image-20200910145044304.png)
 
@@ -129,4 +135,17 @@ Texton-dependent layout filter与standard texture-layout filter一样，除了�
 
 ### 4.4 Learning texture-layout filters using Joint Boost
 
-使用了Joint Boost算法的变式[45]，
+使用了Joint Boost算法的变式[45]，迭代的选择discriminative texture-layout filters 当作 weak learners，然后将它们组合成一个新的 strong classifier $P(c|{\bf x}, i)$。
+
+学得的 strong classifier 是一个additive model: $H(c,i) = \sum_{m=1}^M h_i^m(c)$，$H(c,i)$可以看作一个概率分布：
+$$
+P(c|{\bf x}, i) \propto \exp H(c,i)
+$$
+每个weak learner都是一个基于feature response $v_{[r,t]}(i)$的 decision stump:
+$$
+h_i(c) = 
+\begin{cases} 
+a[v_{[r,t]}(i) > \theta] + b, & \text{if c} \in {\mathcal C} \\
+k^c, & \text{otherwise}
+\end{cases}
+$$
